@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/style.css">
+    <title>Rule Engine</title>
+    <style>
+        .tree-node {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 5px;
+            display: inline-block;
+            position: relative;
+        }
+
+        .children-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+    </style>
+
+</head>
+<body>
+    <div class="container">
+        <h1>Rule Engine</h1>
+        <form id="ruleForm">
+            <label for="rule_string">Enter a rule:</label>
+            <input type="text" id="rule_string" name="rule_string" placeholder="e.g. age > 30" required>
+            <button type="submit">Submit</button>
+        </form>
+        <form id="combineForm" style="margin-top: 20px;">
+            <label for="rules">Enter multiple rules (comma-separated):</label>
+            <input type="text" id="rules" name="rules" placeholder="e.g. age > 30, salary > 50000" required>
+            <button type="submit">Combine Rules</button>
+        </form>
+        <form id="evaluateForm" style="margin-top: 20px;">
+            <label for="attributes">Enter attributes (JSON format):</label>
+            <input type="text" id="attributes" name="attributes" placeholder='e.g. {"age": 35, "salary": 60000}' required>
+            <button type="submit">Evaluate Rule</button>
+        </form>
+        
+        <div id="result"></div>
+        <div id="tree-container" style="margin-top: 20px;"></div>
+
+    </div>
+
+    <script>
+        let combinedRule = null; // Declare combinedRule globally
+          // Function to create tree nodes
+        function createTreeNode(node) {
+            const div = document.createElement('div');
+            div.className = 'tree-node';
+            div.innerHTML = `<strong>${node.value || node.type}</strong>`;
+
+            const childrenContainer = document.createElement('div');
+            childrenContainer.className = 'children-container';
+
+            if (node.left) {
+                const leftChild = createTreeNode(node.left);
+                childrenContainer.appendChild(leftChild);
+            }
+
+            if (node.right) {
+                const rightChild = createTreeNode(node.right);
+                childrenContainer.appendChild(rightChild);
+            }
+
+            div.appendChild(childrenContainer);
+            return div;
+        }
+        
+        document.getElementById('ruleForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            fetch('/create_rule', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const resultDiv = document.getElementById('result');
+                if (data.error) {
+                    resultDiv.innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+                } else {
+                    resultDiv.innerHTML = `<pre>${JSON.stringify(data.ast, null, 2)}</pre>`;
+                }
+            });
+        });
+
+        document.getElementById('combineForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const rules = document.getElementById('rules').value.split(',').map(rule => rule.trim());
+            fetch('/combine_rules', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ rules })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const resultDiv = document.getElementById('result');
+                if (data.error) {
+                    resultDiv.innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+                } else {
+                    resultDiv.innerHTML = `<pre>${JSON.stringify(data.ast, null, 2)}</pre>`;
+                    combinedRule = data.ast; // Store combined rule for evaluation
+                }
+            });
+        });
+
+       document.getElementById('evaluateForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const attributes = document.getElementById('attributes').value;
+            const data = JSON.parse(attributes);
+
+            // Check if combinedRule is available
+            if (!combinedRule) {
+                alert('Please combine rules first before evaluating.');
+                return;
+            }
+
+            fetch('/evaluate_rule', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ combined_rule: combinedRule, data: data })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const resultDiv = document.getElementById('result');
+                if (data) {
+                    resultDiv.innerHTML = `<p style="color: green;">Evaluation Result: True </p>`;
+                } else {
+                    resultDiv.innerHTML = `<p>Evaluation Result: ${data.result}</p>`;
+                }
+            });
+        });
+
+    </script>
+</body>
+</html>
